@@ -122,7 +122,7 @@ thread_start (void)
 void
 thread_timer_update(struct thread *t, int64_t *ticks)
 {
-	if ((t->thread_status == THREAD_BLOCKED) && (*ticks < t->ticks))	{
+	if ((t->status == THREAD_BLOCKED) && (*ticks < t->ticks))	{
 		thread_unblock(t);
 	}
 }
