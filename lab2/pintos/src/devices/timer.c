@@ -90,7 +90,6 @@ void
 timer_sleep (int64_t ticks) 
 {
 	if (ticks > 0) {	/* Don't do anything if less than 1 ticks */
-		int64_t start = timer_ticks();
 		enum intr_level old_level;
 
 		ASSERT(intr_get_level() == INTR_ON);
@@ -178,7 +177,6 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
-  thread_foreach(&thread_timer_update, (void *)(&ticks));
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
