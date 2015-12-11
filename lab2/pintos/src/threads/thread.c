@@ -117,6 +117,16 @@ thread_start (void)
   sema_down (&idle_started);
 }
 
+/* Called on each timer tick to check if a sleeping thread
+   has waited long enough to be unblocked and does so. */
+void
+thread_timer_update(struct thread *t, int64_t *ticks)
+{
+	if ((t->thread_status == THREAD_BLOCKED) && (ticks < t->ticks))	{
+		thread_unblock(t);
+	}
+}
+
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
@@ -183,6 +193,7 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  t->ticks = 0;
 
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
