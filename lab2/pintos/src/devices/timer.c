@@ -89,17 +89,18 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
-  enum intr_level old_level;
+	if (ticks > 0) {	/* Don't do anything if less than 1 ticks */
+		int64_t start = timer_ticks();
+		enum intr_level old_level;
 
-  ASSERT (intr_get_level () == INTR_ON);
-  
-  thread_current ()->ticks = start + ticks;
-  
-  old_level = intr_disable ();
-  thread_block ();
-  printf("YIPPPPPPIIIIIE KAAAAAAYY YEAAAAAAAAEEY MOTHERFUCKER IT HATH BEEN RESTORETHED!");
-  intr_set_level(old_level);
+		ASSERT(intr_get_level() == INTR_ON);
+
+		thread_current()->ticks = start + ticks;
+
+		old_level = intr_disable();
+		thread_block();
+		intr_set_level(old_level);
+	}
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
