@@ -118,12 +118,16 @@ thread_start (void)
 }
 
 /* Called on each timer tick to check if a sleeping thread
-   has waited long enough to be unblocked and does so. */
+   has waited long enough to be unblocked. */
 void
-thread_timer_update(struct thread *t, int64_t *ticks)
+thread_sleep_tick(struct thread *t)
 {
-	if ((t->status == THREAD_BLOCKED) && (t->ticks <= *ticks))	{
-		thread_unblock(t);
+	if ((t->status == THREAD_BLOCKED) && (t->sleep_ticks > 0))
+	{
+		if (--t->sleep_ticks == 0)
+		{
+			thread_unblock(t);
+		}
 	}
 }
 
@@ -143,6 +147,9 @@ thread_tick (void)
 #endif
   else
     kernel_ticks++;
+
+  /* Ticks all sleeping threads */
+  thread_foreach(&thread_sleep_tick, NULL);
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)

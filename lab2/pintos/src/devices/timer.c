@@ -95,9 +95,8 @@ timer_sleep (int64_t ticks)
 
 		ASSERT(intr_get_level() == INTR_ON);
 
-		thread_current()->ticks = start + ticks;
-
-		old_level = intr_disable();
+		old_level = intr_disable();	/* Disables interrupts to call block */
+		thread_current()->sleep_ticks = ticks;
 		thread_block();
 		intr_set_level(old_level);
 	}
