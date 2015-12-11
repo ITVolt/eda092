@@ -98,6 +98,7 @@ timer_sleep (int64_t ticks)
   
   old_level = intr_disable ();
   thread_block ();
+  printf("YIPPPPPPIIIIIE KAAAAAAYY YEAAAAAAAAEEY MOTHERFUCKER IT HATH BEEN RESTORETHED!");
   intr_set_level(old_level);
 }
 
