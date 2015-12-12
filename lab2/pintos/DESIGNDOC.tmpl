@@ -1,0 +1,164 @@
+			+--------------------+
+			|    EDA092/DIT400   |
+			| LAB ASSIGNMENT 2:  |
+			| 	THREADS      |
+			|   DESIGN DOCUMENT  |
+			+--------------------+
+				   
+---- GROUP B27 ----
+
+>> Fill in the group number, names and email addresses of your group members.
+FirstName LastName <email@domain.example>
+
+Patrik Haar <haar@student.chalmers.se>
+David Gustafsson <davgusta@student.chalmers.se>
+
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+			     ALARM CLOCK
+			     ===========
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+file - thread.h
+struct thread
+  {
+    ...
+    /* This variable keeps track of how long to block the tread if it's
+       sleeping, it is ticking down and will wake the thread on 0 */
+    int64_t sleep_ticks;
+    ...
+  };
+
+file - thread.c
+    /* Help method called from thread_tick on each timer interrupt to
+       wake a thread if it has slept long enough */
+    static void thread_sleep_tick(struct thread *t);
+
+---- ALGORITHMS ----
+
+>> A2: Briefly describe what happens in a call to timer_sleep(),
+>> including the effects of the timer interrupt handler.
+
+On a call to timer_sleep() with a tick count > 0 it will set the current
+thread's sleep_ticks to the given amount, disable interrupts and call
+thread_block() to block until the sleep_ticks have reached zero.
+When unblocked it restores interrupts to what it was before thread_block()
+was called.
+
+Each time timer_interrupt is called it will call the method thread_tick()
+which tracks statistics and goes over all blocked threads and decreases
+their sleep_ticks by 1 if they are sleeping. If it is reduced to 0 the
+thread is unblocked.
+
+>> A3: What steps are taken to minimize the amount of time spent in
+>> the timer interrupt handler?
+
+It loops over all threads but only handles those who are sleeping.
+
+---- SYNCHRONIZATION ----
+
+>> A4: How are race conditions avoided when multiple threads call
+>> timer_sleep() simultaneously?
+
+The only critical section is the scheduler called after thread_block(),
+this is handled by disabling interrupts before calling thread_block()
+and since pintos is single core this prevents all other threads from
+accessing it at the same time.
+
+>> A5: How are race conditions avoided when a timer interrupt occurs
+>> during a call to timer_sleep()?
+
+If the timer_sleep was called with a number > 1 the worst that could
+happen is that the thread might sleep 1 tick shorter which is not
+a problem since the method only guarantees the thread to sleep
+APROXIMATELY the given amount of ticks.
+However if timer_sleep() was called with 1 it could be reduced to 0
+before thread_block() was called which would break the ticking that
+would wake it. Therefore we set the number of ticks after we have
+disabled interrupts right before calling thread_block().
+
+---- RATIONALE ----
+
+>> A6: Why did you choose this design?  In what ways is it superior to
+>> another design you considered?
+
+We made a method in thread to check if we should unblock a thread that
+has slept long enough but we debated if we really should iterate over
+all threads in timer.c. The method thread_tick() in thread.c called
+every timer interrupt to handle ticks and threads was the perfect fit
+so we used this for our implementation instead of putting it directly
+in timer_interrupt().
+
+Other then that we didn't really have many different designs in mind,
+we knew we needed something in a specific thread to keep track of when
+to wake it if it is sleeping so having it in the thread struct seemed
+like the natural approach.
+Since interrupts between setting the sleep_ticks and calling
+thread_block() might break the unblocking we chose to put it in the
+part with interruptions disabled.
+
+			    BATCH SCHEDULING
+			    ================
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, semaphore, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+---- SYNCHRONIZATION ----
+
+>> C1: How does your solution guarantee that no more that 3 tasks
+>> are using the bus in the same direction?
+
+>> C2: What prevents tasks from opposite directions from using the
+>> bus simultaneously?
+
+>> C3: How does your solution grant priority to high priority tasks over
+>> the waiting tasks in the same direction?
+
+>> C4: How do you guarantee that despite having priority, high priority
+>> tasks do not start using the bus while there are still still using
+>> it in the oposite direction?
+
+---- RATIONALE ----
+
+>> C6: Why did you choose this design? Did you consider other design 
+>> alternatives? In what ways is it superior to another design you considered?
+
+
+			   SURVEY QUESTIONS (optional)
+			   ===========================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters?
+
+>> Any other comments?

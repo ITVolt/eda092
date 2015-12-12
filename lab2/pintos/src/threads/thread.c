@@ -61,6 +61,7 @@ bool thread_mlfqs;
 
 static void kernel_thread (thread_func *, void *aux);
 
+static void thread_sleep_tick(struct thread *t);
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
@@ -115,20 +116,6 @@ thread_start (void)
 
   /* Wait for the idle thread to initialize idle_thread. */
   sema_down (&idle_started);
-}
-
-/* Called on each timer tick to check if a sleeping thread
-   has waited long enough to be unblocked. */
-void
-thread_sleep_tick(struct thread *t)
-{
-	if ((t->status == THREAD_BLOCKED) && (t->sleep_ticks > 0))
-	{
-		if (--t->sleep_ticks == 0)
-		{
-			thread_unblock(t);
-		}
-	}
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -400,6 +387,20 @@ thread_get_recent_cpu (void)
 {
   /* Not yet implemented. */
   return 0;
+}
+
+/* Called on each timer tick to check if a sleeping thread
+has waited long enough to be unblocked. */
+static void
+thread_sleep_tick(struct thread *t)
+{
+  if ((t->status == THREAD_BLOCKED) && (t->sleep_ticks > 0))
+  {
+    if (--t->sleep_ticks == 0)
+    {
+      thread_unblock(t);
+    }
+  }
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
