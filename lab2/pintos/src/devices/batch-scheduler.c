@@ -53,11 +53,11 @@ void oneTask(task_t task);/*Task requires to use the bus and executes methods be
 void init_bus(void){ 
  
     random_init((unsigned int)123456789); 
-    sema_init(prioQueue[0], 0);
-    sema_init(prioQueue[1], 0);
-    sema_init(normQueue[0], 0);
-    sema_init(normQueue[1], 0);
-    lock_init(lock);
+    sema_init(&prioQueue[0], 0);
+    sema_init(&prioQueue[1], 0);
+    sema_init(&normQueue[0], 0);
+    sema_init(&normQueue[1], 0);
+    lock_init(&lock);
     freeSlots = BUS_CAPACITY;
     waitingPrio[0] = 0;
     waitingPrio[1] = 0;
@@ -84,18 +84,18 @@ void batchScheduler(unsigned int num_tasks_send, unsigned int num_task_receive,
 
   /* Create the high priority tasks threads */
   for (i = 0; i < num_priority_send;i++) {
-    thread_create("ps" + i, PRI_DEFAULT, &senderPriorityTask);
+    thread_create("ps" + i, PRI_DEFAULT, &senderPriorityTask, NULL);
   }
   for (i = 0; i < num_priority_receive;i++) {
-    thread_create("pr" + i, PRI_DEFAULT, &receiverPriorityTask);
+    thread_create("pr" + i, PRI_DEFAULT, &receiverPriorityTask, NULL);
   }
 
   /* Create the normal priority tasks threads */
   for (i = 0; i < num_priority_send;i++) {
-    thread_create("ns" + i, PRI_DEFAULT, &senderTask);
+    thread_create("ns" + i, PRI_DEFAULT, &senderTask, NULL);
   }
   for (i = 0; i < num_priority_send;i++) {
-    thread_create("nr" + i, PRI_DEFAULT, &receiverTask);
+    thread_create("nr" + i, PRI_DEFAULT, &receiverTask, NULL);
   }
 }
 
@@ -134,14 +134,14 @@ void oneTask(task_t task) {
 /* task tries to get slot on the bus subsystem */
 void getSlot(task_t task) 
 {
-  lock_acquire(lock);
+  lock_acquire(&lock);
   if (TASKPRIO == HIGH) {   /* TASKPRIO = task->priority */
     waitingPrio[TASKDIR]++;
     while (!freeSlots || dir != TASKDIR) {
       if (freeSlots != BUS_CAPACITY) {
-        lock_release(lock);
+        lock_release(&lock);
         sema_down(prioQueue[TASKDIR]);  /* TASKDIR = task->direction */
-        lock_acquire(lock);
+        lock_acquire(&lock);
       } else {
         dir = TASKDIR;
       }
@@ -151,9 +151,9 @@ void getSlot(task_t task)
     waitingNorm[TASKDIR]++;
     while (dir != TASKDIR || !freeSlots || (prioQueue[0] + prioQueue[1]) > 0) {
       if (!freeSlots || (prioQueue[0] + prioQueue[1]) > 0 || freeSlots != BUS_CAPACITY) {
-        lock_release(lock);
+        lock_release(&lock);
         sema_down(normQueue[TASKDIR]);
-        lock_acquire(lock);
+        lock_acquire(&lock);
       } else {
         dir = TASKDIR;
       }
@@ -161,7 +161,7 @@ void getSlot(task_t task)
     waitingNorm[TASKDIR]--;
   }
   freeSlots--;
-  lock_release(lock);
+  lock_release(&lock);
 }
 
 /* task processes data on the bus send/receive */
@@ -175,7 +175,7 @@ void transferData(task_t task)
 /* task releases the slot */
 void leaveSlot(task_t task) 
 {
-  lock_acquire(lock);
+  lock_acquire(&lock);
   freeSlots++;
   if (waitingPrio[TASKDIR]) {
     sema_up(prioQueue[TASKDIR]);
@@ -194,5 +194,5 @@ void leaveSlot(task_t task)
       sema_up(normQueue[1-TASKDIR]);
     }
   }
-  lock_release(lock);
+  lock_release(&lock);
 }
