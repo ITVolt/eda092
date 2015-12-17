@@ -7,14 +7,15 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "lib/random.h" //generate random numbers
+#include "devices/timer.h"
 
 #define BUS_CAPACITY 3
 #define SENDER 0
 #define RECEIVER 1
 #define NORMAL 0
 #define HIGH 1
-#define TASKDIR task->direction
-#define TASKPRIO task->priority
+#define TASKDIR task.direction
+#define TASKPRIO task.priority
 
 /*
  *	initialize task with direction and priority
@@ -80,7 +81,7 @@ void init_bus(void){
 void batchScheduler(unsigned int num_tasks_send, unsigned int num_task_receive,
         unsigned int num_priority_send, unsigned int num_priority_receive)
 {
-  int i;
+  unsigned int i;
 
   /* Create the high priority tasks threads */
   for (i = 0; i < num_priority_send;i++) {
@@ -91,10 +92,10 @@ void batchScheduler(unsigned int num_tasks_send, unsigned int num_task_receive,
   }
 
   /* Create the normal priority tasks threads */
-  for (i = 0; i < num_priority_send;i++) {
+  for (i = 0; i < num_tasks_send;i++) {
     thread_create("ns" + i, PRI_DEFAULT, &senderTask, NULL);
   }
-  for (i = 0; i < num_priority_send;i++) {
+  for (i = 0; i < num_task_receive;i++) {
     thread_create("nr" + i, PRI_DEFAULT, &receiverTask, NULL);
   }
 }
@@ -149,8 +150,8 @@ void getSlot(task_t task)
     waitingPrio[TASKDIR]--;
   } else {
     waitingNorm[TASKDIR]++;
-    while (dir != TASKDIR || !freeSlots || (prioQueue[0] + prioQueue[1]) > 0) {
-      if (!freeSlots || (prioQueue[0] + prioQueue[1]) > 0 || freeSlots != BUS_CAPACITY) {
+    while (dir != TASKDIR || !freeSlots || (waitingPrio[0] + waitingPrio[1]) > 0) {
+      if (!freeSlots || (waitingPrio[0] + waitingPrio[1]) > 0 || freeSlots != BUS_CAPACITY) {
         lock_release(&lock);
         sema_down(normQueue[TASKDIR]);
         lock_acquire(&lock);
