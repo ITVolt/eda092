@@ -141,7 +141,7 @@ void getSlot(task_t task)
     while (!freeSlots || dir != TASKDIR) {
       if (freeSlots != BUS_CAPACITY) {
         lock_release(&lock);
-        sema_down(prioQueue[TASKDIR]);  /* TASKDIR = task->direction */
+        sema_down(&prioQueue[TASKDIR]);  /* TASKDIR = task->direction */
         lock_acquire(&lock);
       } else {
         dir = TASKDIR;
@@ -153,7 +153,7 @@ void getSlot(task_t task)
     while (dir != TASKDIR || !freeSlots || (waitingPrio[0] + waitingPrio[1]) > 0) {
       if (!freeSlots || (waitingPrio[0] + waitingPrio[1]) > 0 || freeSlots != BUS_CAPACITY) {
         lock_release(&lock);
-        sema_down(normQueue[TASKDIR]);
+        sema_down(&normQueue[TASKDIR]);
         lock_acquire(&lock);
       } else {
         dir = TASKDIR;
@@ -179,20 +179,20 @@ void leaveSlot(task_t task)
   lock_acquire(&lock);
   freeSlots++;
   if (waitingPrio[TASKDIR]) {
-    sema_up(prioQueue[TASKDIR]);
+    sema_up(&prioQueue[TASKDIR]);
   } else if (!waitingPrio[1-TASKDIR] && waitingNorm[TASKDIR]) {
-    sema_up(normQueue[TASKDIR]);
+    sema_up(&normQueue[TASKDIR]);
   } else if (freeSlots == BUS_CAPACITY) {
     dir = 1 - TASKDIR;
     int tmpFreeSlots = BUS_CAPACITY;
     int i;
     for (i = 0; i < waitingPrio[1-TASKDIR] && tmpFreeSlots > 0; i++) {
       tmpFreeSlots--;
-      sema_up(prioQueue[1-TASKDIR]);
+      sema_up(&prioQueue[1-TASKDIR]);
     }
     for (i = 0; i < waitingNorm[1-TASKDIR] && tmpFreeSlots > 0; i++) {
       tmpFreeSlots--;
-      sema_up(normQueue[1-TASKDIR]);
+      sema_up(&normQueue[1-TASKDIR]);
     }
   }
   lock_release(&lock);
