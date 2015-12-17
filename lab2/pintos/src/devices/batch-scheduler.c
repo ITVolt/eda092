@@ -13,6 +13,8 @@
 #define RECEIVER 1
 #define NORMAL 0
 #define HIGH 1
+#define TASKDIR task->direction
+#define TASKPRIO task->priority
 
 /*
  *	initialize task with direction and priority
@@ -22,6 +24,14 @@ typedef struct {
 	int direction;
 	int priority;
 } task_t;
+
+static struct semaphore prioQueue[2];
+static struct semaphore normQueue[2];
+static struct lock lock;
+static int freeSlots;
+static int waitingPrio[2];
+static int waitingNorm[2];
+static int dir;
 
 void batchScheduler(unsigned int num_tasks_send, unsigned int num_task_receive,
         unsigned int num_priority_send, unsigned int num_priority_receive);
@@ -43,10 +53,17 @@ void oneTask(task_t task);/*Task requires to use the bus and executes methods be
 void init_bus(void){ 
  
     random_init((unsigned int)123456789); 
-    
-    msg("NOT IMPLEMENTED");
-    /* FIXME implement */
-
+    sema_init(prioQueue[0], 0);
+    sema_init(prioQueue[1], 0);
+    sema_init(normQueue[0], 0);
+    sema_init(normQueue[1], 0);
+    lock_init(lock);
+    freeSlots = BUS_CAPACITY;
+    waitingPrio[0] = 0;
+    waitingPrio[1] = 0;
+    waitingNorm[0] = 0;
+    waitingNorm[1] = 0;
+    dir = SENDER;
 }
 
 /*
@@ -63,8 +80,23 @@ void init_bus(void){
 void batchScheduler(unsigned int num_tasks_send, unsigned int num_task_receive,
         unsigned int num_priority_send, unsigned int num_priority_receive)
 {
-    msg("NOT IMPLEMENTED");
-    /* FIXME implement */
+  int i;
+
+  /* Create the high priority tasks threads */
+  for (i = 0; i < num_priority_send;i++) {
+    thread_create("ps" + i, PRI_DEFAULT, &senderPriorityTask);
+  }
+  for (i = 0; i < num_priority_receive;i++) {
+    thread_create("pr" + i, PRI_DEFAULT, &receiverPriorityTask);
+  }
+
+  /* Create the normal priority tasks threads */
+  for (i = 0; i < num_priority_send;i++) {
+    thread_create("ns" + i, PRI_DEFAULT, &senderTask);
+  }
+  for (i = 0; i < num_priority_send;i++) {
+    thread_create("nr" + i, PRI_DEFAULT, &receiverTask);
+  }
 }
 
 /* Normal task,  sending data to the accelerator */
@@ -102,20 +134,65 @@ void oneTask(task_t task) {
 /* task tries to get slot on the bus subsystem */
 void getSlot(task_t task) 
 {
-    msg("NOT IMPLEMENTED");
-    /* FIXME implement */
+  lock_acquire(lock);
+  if (TASKPRIO == HIGH) {   /* TASKPRIO = task->priority */
+    waitingPrio[TASKDIR]++;
+    while (!freeSlots || dir != TASKDIR) {
+      if (freeSlots != BUS_CAPACITY) {
+        lock_release(lock);
+        sema_down(prioQueue[TASKDIR]);  /* TASKDIR = task->direction */
+        lock_acquire(lock);
+      } else {
+        dir = TASKDIR;
+      }
+    }
+    waitingPrio[TASKDIR]--;
+  } else {
+    waitingNorm[TASKDIR]++;
+    while (dir != TASKDIR || !freeSlots || (prioQueue[0] + prioQueue[1]) > 0) {
+      if (!freeSlots || (prioQueue[0] + prioQueue[1]) > 0 || freeSlots != BUS_CAPACITY) {
+        lock_release(lock);
+        sema_down(normQueue[TASKDIR]);
+        lock_acquire(lock);
+      } else {
+        dir = TASKDIR;
+      }
+    }
+    waitingNorm[TASKDIR]--;
+  }
+  freeSlots--;
+  lock_release(lock);
 }
 
 /* task processes data on the bus send/receive */
 void transferData(task_t task) 
 {
-    msg("NOT IMPLEMENTED");
-    /* FIXME implement */
+  //printf("Thread %s started transfer", thread_current->name);
+  timer_msleep(random_ulong() % 2000);
+  //printf("Thread %s finished transfer", thread_current->name);
 }
 
 /* task releases the slot */
 void leaveSlot(task_t task) 
 {
-    msg("NOT IMPLEMENTED");
-    /* FIXME implement */
+  lock_acquire(lock);
+  freeSlots++;
+  if (waitingPrio[TASKDIR]) {
+    sema_up(prioQueue[TASKDIR]);
+  } else if (!waitingPrio[1-TASKDIR] && waitingNorm[TASKDIR]) {
+    sema_up(normQueue[TASKDIR]);
+  } else if (freeSlots == BUS_CAPACITY) {
+    dir = 1 - TASKDIR;
+    int tmpFreeSlots = BUS_CAPACITY;
+    int i;
+    for (i = 0; i < waitingPrio[1-TASKDIR] && tmpFreeSlots > 0; i++) {
+      tmpFreeSlots--;
+      sema_up(prioQueue[1-TASKDIR]);
+    }
+    for (i = 0; i < waitingNorm[1-TASKDIR] && tmpFreeSlots > 0; i++) {
+      tmpFreeSlots--;
+      sema_up(normQueue[1-TASKDIR]);
+    }
+  }
+  lock_release(lock);
 }
