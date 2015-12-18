@@ -53,7 +53,7 @@ void oneTask(task_t task);/*Task requires to use the bus and executes methods be
 /* initializes semaphores */ 
 void init_bus(void){ 
  
-    random_init((unsigned int)123456789); 
+    random_init((unsigned int)123456789);
     sema_init(&prioQueue[0], 0);
     sema_init(&prioQueue[1], 0);
     sema_init(&normQueue[0], 0);
@@ -136,21 +136,23 @@ void oneTask(task_t task) {
 void getSlot(task_t task) 
 {
   lock_acquire(&lock);
-  if (TASKPRIO == HIGH) {   /* TASKPRIO = task->priority */
-    waitingPrio[TASKDIR]++;
-    while (!freeSlots || dir != TASKDIR) {
-      if (freeSlots != BUS_CAPACITY) {
-        lock_release(&lock);
-        sema_down(&prioQueue[TASKDIR]);  /* TASKDIR = task->direction */
+  if (TASKPRIO == HIGH) {    /* TASKPRIO = task.priority */
+    waitingPrio[TASKDIR]++;  /* TASKDIR = task.direction */
+    while (!freeSlots || dir != TASKDIR) { /* Safety measure to remove race conditions */
+      if (freeSlots != BUS_CAPACITY) {  /* We wait if there are no free slots or wrong */
+        lock_release(&lock);            /* direction and are unable to switch */
+        sema_down(&prioQueue[TASKDIR]);
         lock_acquire(&lock);
       } else {
         dir = TASKDIR;
       }
     }
     waitingPrio[TASKDIR]--;
-  } else {
+  } else { /* Low priority tasks */
     waitingNorm[TASKDIR]++;
-    while (dir != TASKDIR || !freeSlots || (waitingPrio[0] + waitingPrio[1]) > 0) {
+    while (dir != TASKDIR || !freeSlots || (waitingPrio[0] + waitingPrio[1]) > 0) { /* Reduces race conditions */
+      /* We wait if there are any waiting high priority tasks, or there are no free slots
+         and we can't change direction */
       if (!freeSlots || (waitingPrio[0] + waitingPrio[1]) > 0 || freeSlots != BUS_CAPACITY) {
         lock_release(&lock);
         sema_down(&normQueue[TASKDIR]);
@@ -161,7 +163,7 @@ void getSlot(task_t task)
     }
     waitingNorm[TASKDIR]--;
   }
-  freeSlots--;
+  freeSlots--;  /* Got place at the bus */
   lock_release(&lock);
 }
 
@@ -178,18 +180,24 @@ void leaveSlot(task_t task)
 {
   lock_acquire(&lock);
   freeSlots++;
+  /* First we check if there are any high prio tasks on the same side */
   if (waitingPrio[TASKDIR]) {
     sema_up(&prioQueue[TASKDIR]);
+  /* Then if we can wake a normal task on the same side */
   } else if (!waitingPrio[1-TASKDIR] && waitingNorm[TASKDIR]) {
     sema_up(&normQueue[TASKDIR]);
+  /* If there are things waiting from the other direction we can change
+     direction if the bus is empty */
   } else if (freeSlots == BUS_CAPACITY) {
     dir = 1 - TASKDIR;
     int tmpFreeSlots = BUS_CAPACITY;
     int i;
+    /* First wake high priority tasks */
     for (i = 0; i < waitingPrio[1-TASKDIR] && tmpFreeSlots > 0; i++) {
       tmpFreeSlots--;
       sema_up(&prioQueue[1-TASKDIR]);
     }
+    /* Then normal priority tasks */
     for (i = 0; i < waitingNorm[1-TASKDIR] && tmpFreeSlots > 0; i++) {
       tmpFreeSlots--;
       sema_up(&normQueue[1-TASKDIR]);
