@@ -113,25 +113,91 @@ part with interruptions disabled.
 			    BATCH SCHEDULING
 			    ================
 ---- DATA STRUCTURES ----
-
 >> A1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, semaphore, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+
+/* A sempaphore that signifies the waiting queues of the priority tasks
+The place 0 in the array signifies the sending side while 1 sigfies the 
+recieving side */
+static struct semaphore prioQueue[2];
+
+/* A semaphore that signifies the waiting queues of the normal tasks
+The place 0 in the array signifies the sending side while 1 sigfies the
+ recieving side */
+static struct semaphore normQueue[2];
+
+/* A lock that manages access to the variables of the batch scheduler, 
+to prevent concurency issues */
+static struct lock lock; 
+
+/* A int that signifies the number of free space on the bus */
+static int freeSlots; 
+
+/* A array signifying the number of waiting priority tasks. 
+The place 0 in the array signifies the sending side while 1 sigfies 
+the recieving side */
+static int waitingPrio[2]; 
+
+/* A array signifying the number of waiting normal tasks. 
+The place 0 in the array signifies the sending side while 1 sigfies 
+the recieving side */
+static int waitingNorm[2];
+
+/* The direction of the bus * /
+static int dir;
+
 
 ---- SYNCHRONIZATION ----
 
 >> C1: How does your solution guarantee that no more that 3 tasks
 >> are using the bus in the same direction?
 
+We have two reasons that prevents no more than 3 tasks to use 
+the bus in the same direction.
+1.By having a lock that enables only one process to either try to 
+enter or leave the bus at a given time. 
+2.After a process is waked up from its queue, the condition for 
+entering the bus is checked again. If they are such that 
+the task are not able to jump on the bus it's put back into the 
+queue.
+
+
 >> C2: What prevents tasks from opposite directions from using the
 >> bus simultaneously?
+
+There are several reasons that a task from opposite direction cant
+ be on the bus at the same time.
+1.We keep track of the direction of the bus with a static variable.
+2.A task of opposite direction to the bus can only change the 
+direction of the bus if the buss is empty. 
+If the buss isn't empty the the task is placed in its respective 
+queue.
+3.After a process is waked up from its queue, the condition 
+for entering the bus is checked again. If they are such that 
+the task are not able to jump on the bus it's put back into the
+queue.
+4. When a task leaves the buss and is not the last one it will 
+wake a task in its own directions waiting queue for a priority 
+tasks.
+If they are none priority tasks and there are none on the other 
+side it will wake up normal task from its own direction. 
+Otherwise we will wait for the buss to be completely empty 
+before switiching direction and waking up tasks from the
+other side.
 
 >> C3: How does your solution grant priority to high priority tasks over
 >> the waiting tasks in the same direction?
 
+A normal priority task will always wait for a high priority tasks if they 
+exist. 
+When a task leaves the buss it will always try to wake high priority tasks first. 
+
 >> C4: How do you guarantee that despite having priority, high priority
 >> tasks do not start using the bus while there are still still using
 >> it in the oposite direction?
+A tasks can only switch the direction of the buss if the buss is empty.
+Also see reasons in C1
 
 ---- RATIONALE ----
 
