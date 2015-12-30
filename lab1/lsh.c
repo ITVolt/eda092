@@ -101,12 +101,19 @@ int main(void)
             }
             RunCommand(cmd);
           } else if (cmd.bakground) { //Parent if background.
-            setpgid(child_pid, child_pid);
+            setpgid(pid, pid);
             printf("Executing background task: %d\n", pid);
           } else {  //Parent if NOT background
             child_pid = pid;
-            //Wait for child to finish
-            waitpid(child_pid, 0, 0);
+            //Wait for children to finish
+            while (waitpid(child_pid, NULL, 0)) {
+              if (errno == ECHILD) {
+                printf("All children dead.\n");
+                break;
+              } else {
+                printf("Child died but there are some still alive.\n");
+              }
+            }
           }
           isExecuting = 0;
         }
@@ -131,7 +138,9 @@ RunShellCommand(Pgm *pgm) {
     printf("It's time to go night night\n");
     exit(0);
   } else if(!strcmp(list[0] , "cd")){
-    if(chdir(list[1]) < 0){
+    if(list[1] == NULL || !strcmp(list[1], "~")) {
+      chdir(getenv("HOME"));
+    } else if(chdir(list[1]) < 0){
       char *errmsg = strerror( errno );
       fprintf(stderr, "CD failed with meassage: %s\n", errmsg);
     }
@@ -278,9 +287,12 @@ signal_handle(int sig){
       kill(child_pid, SIGKILL);
     }
     printf("\n> ");
-  } else if (sig == SIGCHLD) { //Child temrminated.
-    waitpid(-1, 0, WNOHANG); 
+  } else if (sig == EOF) {
+
   }
+  /* else if (sig == SIGCHLD) { //Child temrminated.
+    waitpid(-1, 0, WNOHANG); 
+  }*/
 }
 
 /*
