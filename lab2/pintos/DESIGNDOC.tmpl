@@ -191,7 +191,13 @@ other side.
 
 A normal priority task will always wait for a high priority tasks if they 
 exist. 
-When a task leaves the buss it will always try to wake high priority tasks first. 
+When a task leaves the buss it will always try to wake high priority 
+tasks first.
+If there is only high priority task with a other direction then the 
+buss left, the buss will wait until it's empty and the last task
+will wake up high priority task on the other side.
+This status is evaluated every time a task leaves the buss. 
+ 
 
 >> C4: How do you guarantee that despite having priority, high priority
 >> tasks do not start using the bus while there are still still using
@@ -204,6 +210,20 @@ Also see reasons in C1
 >> C6: Why did you choose this design? Did you consider other design 
 >> alternatives? In what ways is it superior to another design you considered?
 
+We choose this design as we believe it most easily deal with the different 
+concurrencies issues that can appear during the simulation. The design we 
+choose can be describe as creating 4 queues to encompass the different 
+direction and priority combination, and creating a lock that enables 
+only one process to change the data of the buss at the same time.
+
+When we started discussing the solutions for the problem we suggested 
+creating queues that were modelled after the different events the task
+was waiting for i.e. "waiting for one tasks", "waiting for the buss to 
+change direction" and etc. 
+
+This in contrast to our final design would have created several areas
+in the code were we would have to evaluate the direction and priority of
+awakened tasks and would have been detrimental to the code.
 
 			   SURVEY QUESTIONS (optional)
 			   ===========================
@@ -216,13 +236,22 @@ the quarter.
 
 >> In your opinion, was this assignment, or any one of the three problems
 >> in it, too easy or too hard?  Did it take too long or too little time?
+David - I think that the work assignment was quite fair in both time and
+work given. 
 
 >> Did you find that working on a particular part of the assignment gave
 >> you greater insight into some aspect of OS design?
+David - I think that working with the synchronization and dealing with 
+these problems were particularly helpful for me to understand what
+is required on the process managing side of OS.
 
 >> Is there some particular fact or hint we should give students in
 >> future quarters to help them solve the problems?  Conversely, did you
 >> find any of our guidance to be misleading?
+David - It's very helpful to write pseudo code and discussing the problem 
+before implementing a solution for the synchronization. It makes it 
+especially easy to identify the concurrency issues that appears in the 
+assignment.
 
 >> Do you have any suggestions for the TAs to more effectively assist
 >> students, either for future quarters?
