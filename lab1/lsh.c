@@ -49,7 +49,6 @@ void signal_handle(int sig);
 
 /* When non-zero, this global means the user is done using this program. */
 int done = 0;
-int isExecuting = 0;
 pid_t parent_pid;
 pid_t background_pid;
 
@@ -94,16 +93,14 @@ int main(void)
           PrintCommand(n, &cmd);
           printf("Parsing failed\n");
           // Perhaps print the error from the parsing.
-        } else if (!RunShellCommand(cmd.pgm)) { //Checks if the line is a shell command, if not treat it as normal
-          isExecuting = 1;
-          RunCommand(cmd);
-          //Wait for children to finish
+        } else if (!RunShellCommand(cmd.pgm)) { //Checks if the line is a shell command and runs it.
+          RunCommand(cmd);                      //Otherwise try to execute it as normal.
+          //Wait for all children to finish
           while (waitpid(0, NULL, 0)) {
             if (errno == ECHILD) {
               break;
             }
           }
-          isExecuting = 0;
         }
       }
     }
@@ -116,21 +113,29 @@ int main(void)
 }
 
 /*
- * Checks if the input was a shell command and executes it if it is.
+ * Checks if the input is a shell command and executes it if it is.
  * Returns 1 if shell command, 0 if not.
  */
 int
 RunShellCommand(Pgm *pgm) {
   char **list = pgm->pgmlist;
-  if (!strcmp(list[0], "exit")) {
+  if (!strcmp(list[0], "exit")) {       //Exits the shell
+    if (pgm->next) {
+      fprintf(stderr, "Exit is not compatible with pipes.\n");
+      return 1;
+    }
     printf("It's time to go night night\n");
     exit(0);
-  } else if(!strcmp(list[0] , "cd")){
-    if(list[1] == NULL || !strcmp(list[1], "~")) {
-      chdir(getenv("HOME"));
-    } else if(chdir(list[1]) < 0){
-      char *errmsg = strerror( errno );
-      fprintf(stderr, "CD failed with meassage: %s\n", errmsg);
+  } else if(!strcmp(list[0] , "cd")){   //Change the active directory
+    if (pgm->next) {
+      fprintf(stderr, "cd is not compatible with pipes.\n");
+    } else {
+      if(list[1] == NULL || !strcmp(list[1], "~")) {
+        chdir(getenv("HOME"));
+      } else if(chdir(list[1]) < 0){
+        char *errmsg = strerror( errno );
+        fprintf(stderr, "CD failed with meassage: %s\n", errmsg);
+      }
     }
     return 1;
   }
@@ -139,7 +144,8 @@ RunShellCommand(Pgm *pgm) {
 
 /*
  * Runs the given command with input-, output-files and pipes if
- * specified. Pipes will be recursively executed by the RunPipeline
+ * specified. Commands set to be executed in the background will be
+ * set to another process group so they Pipes will be recursively executed by the RunPipeline
  * method.
  */
 void
@@ -147,12 +153,12 @@ RunCommand(Command cmd)
 {
   Pgm *pgm = cmd.pgm;
   
-  if (pgm->next) {  //If there are commands to pipe we redirect in-/outputs.
+  if (pgm->next) {  //If there are several commands we do the necessary piping.
     int fd[2];
     pipe(fd);
     RunPipeline(pgm->next, fd, cmd.rstdin, cmd.bakground);
     pid_t pid = fork();
-    if (pid > 0) {
+    if (pid > 0) {  //Parent
       if (cmd.bakground) {
         background_pid = pid;
         setpgid(pid, background_pid);
@@ -160,7 +166,7 @@ RunCommand(Command cmd)
       }
       close(fd[PIPE_READ]);
       close(fd[PIPE_WRITE]);
-    } else if (pid == 0) {
+    } else if (pid == 0) {  //Child
       if (cmd.bakground) {
         setpgid(0,0);
       }
@@ -173,13 +179,13 @@ RunCommand(Command cmd)
       }
       ExecuteCommand(pgm);
     }
-  } else {
+  } else {  //If there are no pipes, just a single command.
     pid_t pid = fork();
-    if (pid > 0 && cmd.bakground) {
+    if (pid > 0 && cmd.bakground) {   //Parent (only does something if the command is set as background)
       background_pid = pid;
       setpgid(pid, background_pid);
       printf("Backround process %d started.\n", background_pid);
-    } else if (pid == 0) {
+    } else if (pid == 0) {            //Child
       if (cmd.bakground) {
         setpgid(0,0);
       }
@@ -200,37 +206,45 @@ RunCommand(Command cmd)
 
 /*
  * Recursive function execute piped commands.
- * Parents wait for the children to execute and if the child fails
- * the parent will not be executed.
+ * Commands take their inputs from "deeper" into the pipeline
+ * and sends the output upwards.
+ * Parameters:
+ * pgm   - The program to execute
+ * fd    - The pipe to the program listening to this one
+ * input - If this is set then the last program will use it as it's input
+ * isBackground - With this set the main thread will not wait for the
+ *                program to finish and will set it to another process group
  */
 void
 RunPipeline(Pgm *pgm, int *fd, char *input, int isBackground) {
-  if (pgm->next) {
+  if (pgm->next) {  //If there are more commands we keep calling this method.
     int fd2[2];
     pipe(fd2);
     RunPipeline(pgm->next, fd2, input, isBackground);
     pid_t pid = fork();
-    if (pid > 0) {
+    if (pid > 0) {  //Parent
       if (isBackground) {
         setpgid(pid, background_pid);
       }
       close(fd2[PIPE_READ]);
       close(fd2[PIPE_WRITE]);
-    } else if (pid == 0) {
+    } else if (pid == 0) {  //Child
       if (isBackground) {
         setpgid(0, background_pid);
       }
+      /* Makes this thread take input from below it
+         and sends the output upwards */
       dup2(fd2[PIPE_READ], 0);
       dup2(fd[PIPE_WRITE], 1);
       close(fd2[PIPE_WRITE]);
       close(fd[PIPE_READ]);
       ExecuteCommand(pgm);
     }
-  } else {  //This is the last pipe.
+  } else {  //This is the last command.
     pid_t pid = fork();
-    if (pid > 0 && isBackground) {
+    if (pid > 0 && isBackground) {  //Parent
       setpgid(pid, background_pid);
-    } else if (pid == 0) {
+    } else if (pid == 0) {  //Child
       if (isBackground) {
         setpgid(0, background_pid);
       }
@@ -238,7 +252,6 @@ RunPipeline(Pgm *pgm, int *fd, char *input, int isBackground) {
       close(fd[PIPE_READ]);
       if (input) {       //If there is a specified input we use it as stdin.
         if (SetFileAsStdin(input) != 1) {
-          fprintf(stderr, "Failed to set input, prevent execution of %s\n", pgm->pgmlist[0]);
           exit(1);  //Does not continue to execute command on error when setting input.
         }
       }
@@ -301,10 +314,7 @@ SetFileAsStdout(char *filename) {
  */
 void 
 signal_handle(int sig){
-  if(sig == SIGINT){  //Ctrl+C Recieved then kill the current (foreground) process.
-    if(isExecuting){
-      //kill(-parent_pid, SIGKILL);
-    }
+  if(sig == SIGINT){  //Handle Ctrl+C so it doesn't kill the main thread.
     printf("\n> ");
   } else if (sig == SIGCHLD) { //Child temrminated.
     waitpid(-1, 0, WNOHANG);
